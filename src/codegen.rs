@@ -62,59 +62,32 @@ impl_format_trait! {
     UpperHex,
 }
 
-#[inline]
-fn get_formatter<T, F: FormatTrait + ?Sized>()
-    -> Option<impl Fn(&T, &mut Formatter) -> Result>
-{
-    if F::allowed::<T>() {
-        Some(F::perform::<T>)
-    } else {
-        None
-    }
-}
-
-#[inline]
-// The combined function which will be returned by `make_combined`.
-fn combined<A, B, LHS, RHS>(a: &A, f: &mut Formatter) -> Result
-    where LHS: Fn(&A) -> &B, RHS: Fn(&B, &mut Formatter) -> Result
-{
-    let lhs = unsafe { zeroed::<LHS>() };
-    let rhs = unsafe { zeroed::<RHS>() };
-    rhs(lhs(a), f)
-}
-
 // Local type alias for the formatting function pointer type.
 type FormatFn<T> = fn(&T, &mut Formatter) -> Result;
 
-// Accepts dummy arguments to allow type parameter inference, and returns
-// `combined` instantiated with those arguments.
+/// Attempt to convert a function from `&This` to `&Value` into a function that formats
+/// an `&Value` with the given format type `Format`.
+/// Returns `Some` only when `Value` implements `Format`
 #[inline]
-fn make_combined<A, B, LHS, RHS>(_: LHS, _: RHS) -> FormatFn<A>
-    where LHS: Fn(&A) -> &B, RHS: Fn(&B, &mut Formatter) -> Result
-{
-    // check that both function
-    assert!(size_of::<LHS>() == 0,
-        "Mapper from parent to child must be zero-sized, instead size was {}",
-        size_of::<LHS>());
-    assert!(size_of::<RHS>() == 0,
-        "Formatting function must be zero-sized, instead size was {}",
-        size_of::<RHS>());
-    combined::<A, B, LHS, RHS>
-}
+pub fn get_formatter<Format, This, Value, Mapper>(_: Mapper) -> Option<FormatFn<This>>
+    where Format: FormatTrait + ?Sized, Mapper: Fn(&This) -> &Value {
 
-/// Combine a function from `&A` to `&B` and a formatting trait applicable to
-/// `B` and return a function pointer which will convert a `&A` to `&B` and
-/// then format it with the given trait.
-///
-/// Returns `None` if the formatting trait is not applicable to `B`.
-/// Panics if `func` is not zero-sized.
-#[inline]
-pub fn combine<F, A, B, Func>(func: Func)
-    -> Option<FormatFn<A>>
-    where F: FormatTrait + ?Sized, Func: Fn(&A) -> &B
-{
-    // Combines `get_formatter` and `make_combined` in one.
-    get_formatter::<B, F>().map(|r| make_combined(func, r))
+    assert!(size_of::<Mapper>() == 0,
+            "Mapper from parent to child must be zero-sized, instead size was {}",
+            size_of::<Mapper>());
+
+    if Format::allowed::<Value>() {
+        fn inner<Format, This, Value, Mapper>(this: &This, fmt: &mut Formatter) -> Result
+            where Format: FormatTrait + ?Sized, Mapper: Fn(&This) -> &Value {
+
+            let mapper = unsafe { zeroed::<Mapper>() };
+            Format::perform::<Value>(mapper(this), fmt)
+        }
+        Some(inner::<Format, This, Value, Mapper>)
+    }
+    else {
+        None
+    }
 }
 
 // Specialization abuse to select only functions which return `&usize`.
@@ -133,11 +106,23 @@ impl SpecUsize for usize {
     fn convert<T>(f: fn(&T) -> &usize) -> Option<fn(&T) -> &usize> { Some(f) }
 }
 
-/// Attempt to convert a function from `&A` to `&B` to a function from `&A`
+/// Attempt to convert a function from `&This` to `&VAlue` to a function from `&This`
 /// to `&usize`. Returns `Some` only when `B` is `usize`.
 #[inline]
-pub fn as_usize<A, B>(f: fn(&A) -> &B) -> Option<fn(&A) -> &usize> {
-    <B as SpecUsize>::convert::<A>(f)
+pub fn get_as_usize<This, Value, Mapper>(_: Mapper) -> Option<fn(&This) -> &usize>
+    where Mapper: Fn(&This) -> &Value {
+
+    assert!(size_of::<Mapper>() == 0,
+            "Mapper from parent to child must be zero-sized, instead size was {}",
+            size_of::<Mapper>());
+
+    fn inner<This, Value, Mapper>(this: &This) -> &Value
+        where Mapper: Fn(&This) -> &Value {
+
+        let mapper = unsafe { zeroed::<Mapper>() };
+        mapper(this)
+    }
+    <Value as SpecUsize>::convert(inner::<This, Value, Mapper>)
 }
 
 /// A trait for types against which formatting specifiers may be pre-checked.

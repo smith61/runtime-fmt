@@ -106,10 +106,6 @@ impl<'a> Container<'a> {
         &self.ast.ident
     }
 
-    pub fn generics(&self) -> &'a syn::Generics {
-        &self.ast.generics
-    }
-
     pub fn fields(&self) -> &[Field<'a>] {
         &self.fields
     }
@@ -120,9 +116,7 @@ pub struct Field<'a> {
     field_index: usize,
 
     ident: Cow<'a, syn::Ident>,
-    aliases: Vec<&'a str>,
-
-    ty: &'a syn::Ty
+    aliases: Vec<&'a str>
 }
 
 impl<'a> Field<'a> {
@@ -164,9 +158,7 @@ impl<'a> Field<'a> {
                 field_index: field_index,
 
                 ident: ident,
-                aliases: aliases,
-
-                ty: &ast.ty
+                aliases: aliases
             })
         }
         else {
@@ -184,10 +176,6 @@ impl<'a> Field<'a> {
 
     pub fn aliases(&self) -> &[&'a str] {
         &self.aliases
-    }
-
-    pub fn ty(&self) -> &'a syn::Ty {
-        self.ty
     }
 
 }

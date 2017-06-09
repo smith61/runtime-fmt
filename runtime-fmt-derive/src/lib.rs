@@ -89,11 +89,10 @@ fn build_get_child<'a>(container: &Container<'a>) -> quote::Tokens {
     let mut matches = quote::Tokens::new();
     for field in container.fields() {
         let index = field.index();
-        let ty = field.ty();
         let ident = field.ident();
 
         matches.append(quote! {
-            #index => _runtime_fmt::codegen::combine::<__F, Self, #ty, _>(
+            #index => _runtime_fmt::codegen::get_formatter::<__F, Self, _, _>(
                 |this| &this.#ident
             ),
         });
@@ -107,33 +106,15 @@ fn build_get_child<'a>(container: &Container<'a>) -> quote::Tokens {
 }
 
 fn build_as_usize<'a>(container: &'a Container) -> quote::Tokens {
-    let self_ = container.ident();
-    let (_, ty_generics, where_clause) = container.generics().split_for_impl();
-
-    // To avoid causing trouble with lifetime elision rules, an explicit
-    // lifetime for the input and output is used.
-    let lifetime = syn::Ident::new("'__as_usize_inner");
-    let mut generics2 = container.generics().clone();
-    generics2.lifetimes.insert(0, syn::LifetimeDef {
-        attrs: vec![],
-        lifetime: syn::Lifetime { ident: lifetime.clone() },
-        bounds: vec![],
-    });
-    let (impl_generics, _, _) = generics2.split_for_impl();
-
     let mut matches = quote::Tokens::new();
     for field in container.fields() {
         let index = field.index();
-        let ty = field.ty();
         let ident = field.ident();
 
         matches.append(quote! {
-            #index => {
-                fn inner #impl_generics (this: &#lifetime #self_ #ty_generics)
-                    -> &#lifetime #ty
-                    #where_clause { &this.#ident }
-                _runtime_fmt::codegen::as_usize(inner)
-            },
+            #index => _runtime_fmt::codegen::get_as_usize::<Self, _, _>(
+                |this| &this.#ident
+            ),
         });
     }
 
